@@ -8,9 +8,9 @@ Handles: PDF folder selection, batch job submission/resumption,
 import os
 import sys
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                              QLabel, QLineEdit, QTextEdit, QProgressBar,
-                              QFileDialog, QMessageBox, QGroupBox, QFrame,
-                              QComboBox, QDialog, QFormLayout, QDialogButtonBox)
+                             QLabel, QLineEdit, QTextEdit, QProgressBar,
+                             QFileDialog, QMessageBox, QGroupBox, QFrame,
+                             QComboBox, QDialog, QFormLayout, QDialogButtonBox)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
@@ -32,11 +32,12 @@ _DEFAULT_PROMPT_PATH = os.path.join(_base_dir, "Extraction_Prompt Updated.txt")
 class ApiSettingsDialog(QDialog):
     """Popup dialog for entering API key and selecting the extraction prompt file."""
 
-    def __init__(self, api_key: str, prompt_path: str, parent=None):
+    def __init__(self, api_key: str, prompt_path: str, api_model: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle("API & Extraction Settings")
         self.setMinimumWidth(520)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(self.windowFlags() & ~
+                            Qt.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
@@ -61,7 +62,8 @@ class ApiSettingsDialog(QDialog):
         show_btn.setFixedWidth(32)
         show_btn.setCheckable(True)
         show_btn.setToolTip("Show / hide key")
-        show_btn.setStyleSheet("padding: 2px; border: 1px solid #aaa; border-radius: 3px;")
+        show_btn.setStyleSheet(
+            "padding: 2px; border: 1px solid #aaa; border-radius: 3px;")
         show_btn.toggled.connect(
             lambda checked: self.api_key_edit.setEchoMode(
                 QLineEdit.Normal if checked else QLineEdit.Password
@@ -78,7 +80,8 @@ class ApiSettingsDialog(QDialog):
 
         # ── Prompt file field ──────────────────────────────────────────────
         self.prompt_edit = QLineEdit(prompt_path)
-        self.prompt_edit.setPlaceholderText("Path to extraction prompt .txt file…")
+        self.prompt_edit.setPlaceholderText(
+            "Path to extraction prompt .txt file…")
         self.prompt_edit.setFont(QFont("Segoe UI", 9))
         self.prompt_edit.setReadOnly(True)
         self.prompt_edit.setMinimumWidth(300)
@@ -97,10 +100,32 @@ class ApiSettingsDialog(QDialog):
         prompt_widget.setLayout(prompt_row)
         form.addRow("Extraction Prompt:", prompt_widget)
 
+        # ── Model selection field ──────────────────────────────────────────
+        self.model_combo = QComboBox()
+        self.model_combo.addItems([
+            "gemini-3.5-flash",
+            "gemini-3.1-pro-preview",
+            "gemini-3.1-flash-lite",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+        ])
+        self.model_combo.setEditable(True)
+        self.model_combo.setFont(QFont("Segoe UI", 9))
+        self.model_combo.setMinimumWidth(300)
+
+        idx = self.model_combo.findText(api_model)
+        if idx >= 0:
+            self.model_combo.setCurrentIndex(idx)
+        else:
+            self.model_combo.setEditText(api_model)
+
+        form.addRow("Model:", self.model_combo)
+
         layout.addLayout(form)
 
         # ── Buttons ────────────────────────────────────────────────────────
-        btn_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        btn_box = QDialogButtonBox(
+            QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         btn_box.button(QDialogButtonBox.Save).setStyleSheet(
             "padding: 7px 18px; background-color: #1565C0; color: white; border-radius: 4px; font-weight: bold;"
         )
@@ -128,6 +153,10 @@ class ApiSettingsDialog(QDialog):
     def prompt_path(self) -> str:
         return self.prompt_edit.text().strip()
 
+    @property
+    def api_model(self) -> str:
+        return self.model_combo.currentText().strip()
+
 
 class BatchTab(QWidget):
     """Tab widget for batch PDF processing and Excel merging."""
@@ -145,6 +174,8 @@ class BatchTab(QWidget):
             self.session["api_key"] = _DEFAULT_API_KEY
         if not self.session.get("extraction_prompt_path"):
             self.session["extraction_prompt_path"] = _DEFAULT_PROMPT_PATH
+        if not self.session.get("api_model"):
+            self.session["api_model"] = "gemini-3.5-flash"
         self._init_ui()
         self._restore_from_session()
 
@@ -170,7 +201,8 @@ class BatchTab(QWidget):
         api_settings_btn.setStyleSheet(
             "padding: 6px 14px; font-size: 12px; background-color: #1565C0; color: white; border-radius: 4px;"
         )
-        api_settings_btn.setToolTip("Configure API key and extraction prompt file")
+        api_settings_btn.setToolTip(
+            "Configure API key and extraction prompt file")
         api_settings_btn.clicked.connect(self._open_api_settings)
 
         mode_row.addWidget(mode_label)
@@ -190,7 +222,8 @@ class BatchTab(QWidget):
         self.pdf_label.setFont(QFont("Segoe UI", 10))
         pdf_btn = QPushButton("Browse PDF Folder")
         pdf_btn.clicked.connect(self._browse_pdf_folder)
-        pdf_btn.setStyleSheet("padding: 7px 14px; background-color: #37474F; color: white; border-radius: 4px;")
+        pdf_btn.setStyleSheet(
+            "padding: 7px 14px; background-color: #37474F; color: white; border-radius: 4px;")
         step1_layout.addWidget(self.pdf_label, 1)
         step1_layout.addWidget(pdf_btn)
         step1_group.setLayout(step1_layout)
@@ -214,7 +247,8 @@ class BatchTab(QWidget):
         resume_layout = QHBoxLayout()
         resume_layout.addWidget(QLabel("Job ID:"))
         self.job_id_input = QLineEdit()
-        self.job_id_input.setPlaceholderText("e.g. batches/123456789  (leave empty for new job)")
+        self.job_id_input.setPlaceholderText(
+            "e.g. batches/123456789  (leave empty for new job)")
         self.job_id_input.setFont(QFont("Segoe UI", 10))
         resume_layout.addWidget(self.job_id_input)
 
@@ -264,7 +298,8 @@ class BatchTab(QWidget):
         self.json_file_label.setFont(QFont("Segoe UI", 10))
         json_file_btn = QPushButton("Browse JSON File")
         json_file_btn.clicked.connect(self._browse_json_file)
-        json_file_btn.setStyleSheet("padding: 7px 14px; background-color: #37474F; color: white; border-radius: 4px;")
+        json_file_btn.setStyleSheet(
+            "padding: 7px 14px; background-color: #37474F; color: white; border-radius: 4px;")
         json_row.addWidget(self.json_file_label, 1)
         json_row.addWidget(json_file_btn)
         step3_layout.addLayout(json_row)
@@ -274,7 +309,8 @@ class BatchTab(QWidget):
         self.excel_label.setFont(QFont("Segoe UI", 10))
         excel_btn = QPushButton("Browse Excel File")
         excel_btn.clicked.connect(self._browse_excel_file)
-        excel_btn.setStyleSheet("padding: 7px 14px; background-color: #37474F; color: white; border-radius: 4px;")
+        excel_btn.setStyleSheet(
+            "padding: 7px 14px; background-color: #37474F; color: white; border-radius: 4px;")
         excel_row.addWidget(self.excel_label, 1)
         excel_row.addWidget(excel_btn)
         step3_layout.addLayout(excel_row)
@@ -350,7 +386,8 @@ class BatchTab(QWidget):
 
     # ── Slots ───────────────────────────────────────────────────────────────
     def _change_mode(self):
-        dlg = ProcessingModeDialog(current_mode=self.processing_mode, parent=self)
+        dlg = ProcessingModeDialog(
+            current_mode=self.processing_mode, parent=self)
         if dlg.exec_():
             self.processing_mode = dlg.mode
             self.mode_display.setText(self._mode_text())
@@ -398,14 +435,16 @@ class BatchTab(QWidget):
         self._check_merge_btn()
 
     def _browse_json_file(self):
-        file, _ = QFileDialog.getOpenFileName(self, "Select JSON File", "", "JSON Files (*.json)")
+        file, _ = QFileDialog.getOpenFileName(
+            self, "Select JSON File", "", "JSON Files (*.json)")
         if file:
             self._set_merge_json(file)
             self.log_text.append(f"Selected JSON file: {file}\n")
             self.on_session_change()
 
     def _browse_excel_file(self):
-        file, _ = QFileDialog.getOpenFileName(self, "Select Excel File", "", "Excel Files (*.xlsx *.xls)")
+        file, _ = QFileDialog.getOpenFileName(
+            self, "Select Excel File", "", "Excel Files (*.xlsx *.xls)")
         if file:
             self.excel_file = file
             self.excel_label.setText(os.path.basename(file))
@@ -416,37 +455,44 @@ class BatchTab(QWidget):
 
     def _check_merge_btn(self):
         self.merge_btn.setEnabled(
-            bool(getattr(self, 'json_file', '')) and bool(getattr(self, 'excel_file', ''))
+            bool(getattr(self, 'json_file', '')) and bool(
+                getattr(self, 'excel_file', ''))
         )
 
     def _open_api_settings(self):
         """Open the API & Extraction Settings popup."""
         dlg = ApiSettingsDialog(
             api_key=self.session.get("api_key", _DEFAULT_API_KEY),
-            prompt_path=self.session.get("extraction_prompt_path", _DEFAULT_PROMPT_PATH),
+            prompt_path=self.session.get(
+                "extraction_prompt_path", _DEFAULT_PROMPT_PATH),
+            api_model=self.session.get("api_model", "gemini-3.5-flash"),
             parent=self
         )
         if dlg.exec_():
             self.session["api_key"] = dlg.api_key
             self.session["extraction_prompt_path"] = dlg.prompt_path
+            self.session["api_model"] = dlg.api_model
             self.on_session_change()
             self.log_text.append(
-                f"✓ Settings saved — prompt: {os.path.basename(dlg.prompt_path)}\n"
+                f"✓ Settings saved — prompt: {os.path.basename(dlg.prompt_path)} | model: {dlg.api_model}\n"
             )
 
     def _open_previous_jobs(self):
-        dlg = PreviousJobsDialog(api_key=self.session.get("api_key", _DEFAULT_API_KEY), parent=self)
+        dlg = PreviousJobsDialog(api_key=self.session.get(
+            "api_key", _DEFAULT_API_KEY), parent=self)
         if dlg.exec_() == PreviousJobsDialog.Accepted:
             if dlg.selected_job_id:
                 self.job_id_input.setText(dlg.selected_job_id)
                 self.session["batch_job_id"] = dlg.selected_job_id
                 self.on_session_change()
-                self.log_text.append(f"Job ID loaded from Previous Jobs: {dlg.selected_job_id}\n")
+                self.log_text.append(
+                    f"Job ID loaded from Previous Jobs: {dlg.selected_job_id}\n")
             if dlg.result_json_path:
                 self._set_merge_json(dlg.result_json_path)
                 self.session["json_file"] = dlg.result_json_path
                 self.on_session_change()
-                self.log_text.append(f"Results downloaded to: {dlg.result_json_path}\n")
+                self.log_text.append(
+                    f"Results downloaded to: {dlg.result_json_path}\n")
                 QMessageBox.information(
                     self, "Results Loaded",
                     f"Results have been loaded into the merge section:\n{dlg.result_json_path}"
@@ -455,13 +501,17 @@ class BatchTab(QWidget):
     def _process_pdfs(self):
         job_id = self.job_id_input.text().strip()
         api_key = self.session.get("api_key", _DEFAULT_API_KEY)
-        prompt_path = self.session.get("extraction_prompt_path", _DEFAULT_PROMPT_PATH)
+        prompt_path = self.session.get(
+            "extraction_prompt_path", _DEFAULT_PROMPT_PATH)
+        api_model = self.session.get("api_model", "gemini-3.5-flash")
 
         if not getattr(self, 'pdf_folder', '') and not job_id:
-            QMessageBox.warning(self, "Warning", "Please select a PDF folder or enter a Batch Job ID.")
+            QMessageBox.warning(
+                self, "Warning", "Please select a PDF folder or enter a Batch Job ID.")
             return
         if not api_key:
-            QMessageBox.warning(self, "Warning", "Please set your API key via the 🔑 API Settings button.")
+            QMessageBox.warning(
+                self, "Warning", "Please set your API key via the 🔑 API Settings button.")
             return
         if not job_id and not os.path.exists(prompt_path):
             QMessageBox.warning(self, "Warning",
@@ -486,7 +536,7 @@ class BatchTab(QWidget):
 
         self._thread = ProcessingThread(
             getattr(self, 'pdf_folder', ''), json_filename, api_key,
-            prompt_path, job_id, save_dir, self.processing_mode
+            prompt_path, job_id, save_dir, self.processing_mode, api_model
         )
         self._thread.progress_update.connect(self._update_log)
         self._thread.progress_value.connect(self.progress_bar.setValue)
@@ -507,13 +557,16 @@ class BatchTab(QWidget):
             self._set_merge_json(message)
             self.session["json_file"] = message
             self.on_session_change()
-            QMessageBox.information(self, "Success", "Processing completed successfully!")
+            QMessageBox.information(
+                self, "Success", "Processing completed successfully!")
         else:
-            QMessageBox.critical(self, "Error", f"Processing failed:\n{message}")
+            QMessageBox.critical(
+                self, "Error", f"Processing failed:\n{message}")
 
     def _merge_to_excel(self):
         if not getattr(self, 'json_file', '') or not getattr(self, 'excel_file', ''):
-            QMessageBox.warning(self, "Warning", "Please select both a JSON file and an Excel file.")
+            QMessageBox.warning(
+                self, "Warning", "Please select both a JSON file and an Excel file.")
             return
         self.merge_btn.setEnabled(False)
         self.log_text.append("\n" + "="*50 + "\n")
@@ -525,13 +578,15 @@ class BatchTab(QWidget):
     def _merge_finished(self, success, message):
         self.merge_btn.setEnabled(True)
         if success:
-            QMessageBox.information(self, "Success", f"Merge completed!\n{message}")
+            QMessageBox.information(
+                self, "Success", f"Merge completed!\n{message}")
         else:
             QMessageBox.critical(self, "Error", f"Merge failed:\n{message}")
 
     def _update_log(self, message):
         self.log_text.append(message)
-        self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
+        self.log_text.verticalScrollBar().setValue(
+            self.log_text.verticalScrollBar().maximum())
 
     # ── Public API for cross-tab use ────────────────────────────────────────
     def get_json_file(self) -> str:

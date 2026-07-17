@@ -1,3 +1,6 @@
 Final Pdfs/*
 *.xlsx
 *.json
+*.pyc
+.env
+*.pdf

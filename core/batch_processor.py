@@ -25,7 +25,7 @@ class ProcessingThread(QThread):
 
     def __init__(self, pdf_folder, json_filename, api_key,
                  extraction_prompt_path, batch_job_id="", save_dir="",
-                 processing_mode="batch"):
+                 processing_mode="batch", api_model="gemini-3.5-flash"):
         """
         processing_mode: "batch" or "one_by_one"
         """
@@ -37,6 +37,7 @@ class ProcessingThread(QThread):
         self.batch_job_id = batch_job_id
         self.save_dir = save_dir
         self.processing_mode = processing_mode
+        self.api_model = api_model
 
     def _output_path(self):
         if self.save_dir:
@@ -77,6 +78,10 @@ class ProcessingThread(QThread):
 
             cleaned_pdf_files = [f for f in os.listdir(cleaned_folder) if f.lower().endswith('.pdf')]
             
+            if self.processing_mode == "one_by_one":
+                self._process_one_by_one(client, cleaned_folder, cleaned_pdf_files, extraction_prompt, output_json_path)
+                return
+
             jsonl_dir = self.save_dir if self.save_dir else os.path.dirname(self.pdf_folder)
             jsonl_path = os.path.join(jsonl_dir, "batch_requests.jsonl")
 
@@ -138,7 +143,7 @@ class ProcessingThread(QThread):
                 config={"mime_type": "application/jsonlines"}
             )
             job = client.batches.create(
-                model="gemini-3-flash-preview",
+                model=self.api_model,
                 src=jsonl_info.name
             )
             self.progress_update.emit(f"✓ Batch Job Submitted! ID: {job.name}")
@@ -215,6 +220,64 @@ class ProcessingThread(QThread):
 
         self.progress_value.emit(100)
         self.progress_update.emit(f"\n✓ Processing complete! Results saved to: {output_json_path}")
+        self.finished.emit(True, output_json_path)
+
+    def _process_one_by_one(self, client, cleaned_folder, cleaned_pdf_files, extraction_prompt, output_json_path):
+        import time
+        results = {}
+        for i, pdf_file in enumerate(cleaned_pdf_files):
+            pdf_path = os.path.join(cleaned_folder, pdf_file)
+            self.progress_update.emit(f"\nProcessing ({i+1}/{len(cleaned_pdf_files)}): {pdf_file}")
+            
+            try:
+                pdf_info = client.files.upload(
+                    file=pdf_path,
+                    config={"mime_type": "application/pdf", "display_name": pdf_file}
+                )
+                
+                # Wait for active
+                while pdf_info.state == "PROCESSING":
+                    time.sleep(2)
+                    pdf_info = client.files.get(name=pdf_info.name)
+                
+                if pdf_info.state == "FAILED":
+                    raise Exception("File processing failed on Google servers.")
+                    
+                response = client.models.generate_content(
+                    model=self.api_model,
+                    contents=[
+                        {"role": "user", "parts": [
+                            {"file_data": {"file_uri": pdf_info.uri, "mime_type": "application/pdf"}},
+                            {"text": extraction_prompt}
+                        ]}
+                    ]
+                )
+                
+                text = response.text.strip()
+                for prefix in ("```json", "```"):
+                    if text.startswith(prefix):
+                        text = text[len(prefix):]
+                if text.endswith("```"):
+                    text = text[:-3]
+                results[pdf_file] = json.loads(text.strip())
+                self.progress_update.emit(f"  ✓ {pdf_file} completed")
+                
+            except Exception as e:
+                self.progress_update.emit(f"  ✗ Error on {pdf_file}: {str(e)}")
+                results[pdf_file] = {
+                    "error": f"Failed: {str(e)}",
+                    "av_date": {"value": "not sure", "document_page": "not sure"},
+                    "actuarial_return_rate": {"value": "not sure", "document_page": "not sure"},
+                    "smoothing_years": {"value": "not sure", "document_page": "not sure"},
+                    "actuarial_inflation_rate": {"value": "not sure", "document_page": "not sure"}
+                }
+            self.progress_value.emit(20 + int((i + 1) / len(cleaned_pdf_files) * 80))
+            
+        with open(output_json_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+            
+        self.progress_value.emit(100)
+        self.progress_update.emit(f"\n✓ One-by-One Processing complete! Results saved to: {output_json_path}")
         self.finished.emit(True, output_json_path)
 
 
