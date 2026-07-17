@@ -4,3 +4,8 @@ Final Pdfs/*
 *.pyc
 .env
 *.pdf
+build/*
+dist/*
+*.exe
+*.zip
+*.spec
